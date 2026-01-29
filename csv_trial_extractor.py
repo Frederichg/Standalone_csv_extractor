@@ -148,7 +148,7 @@ class CSVTrialExtractor:
         # Instructions
         info_frame = ttk.Frame(parent)
         info_frame.pack(fill='x', padx=10, pady=5)
-        ttk.Label(info_frame, text="Configure up to 15 markers to track in trials. Leave unused markers unconfigured.", 
+        ttk.Label(info_frame, text="Configure up to 20 markers to track in trials. Leave unused markers unconfigured.", 
                   font=('Arial', 9, 'italic')).pack()
         
         # Create canvas with scrollbar
@@ -170,13 +170,13 @@ class CSVTrialExtractor:
         canvas.pack(side="left", fill="both", expand=True)
         scrollbar.pack(side="right", fill="y")
         
-        # Create 15 marker rows
+        # Create 20 marker rows
         headers = ['Marker', 'State', 'Reward?', 'Reward State']
         for col, header in enumerate(headers):
             ttk.Label(self.marker_frame, text=header, font=('Arial', 9, 'bold')).grid(
                 row=0, column=col, padx=5, pady=5, sticky='w')
         
-        for i in range(15):
+        for i in range(20):
             self.create_marker_row(i)
     
     def create_marker_row(self, index):
