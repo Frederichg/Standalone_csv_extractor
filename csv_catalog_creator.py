@@ -2,6 +2,11 @@
 CSV Catalog Creator
 Scans a folder for CSV files and creates an Excel catalog with extracted date/time information
 """
+#TODO: J'ajouterai la fonction de copie des fichiers .csv sur le serveur
+#TODO: il y a l'autre script Matlab de Camille qu'on a pas de version définitive en .py
+#TODO: Ce serait bien de pouvoir faire 'append' le catalogue si il existe déjà
+#TODO: Un petit fichier avec les sexes ou autres infos pourrait automatique s'Ajouter au catalogue
+
 
 import tkinter as tk
 from tkinter import ttk, filedialog, messagebox

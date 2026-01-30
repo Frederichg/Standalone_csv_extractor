@@ -3,6 +3,9 @@ CSV Trial Extractor - Behavior Analysis Data Processing
 Extracts trial-based data from CSV files using a catalog-based approach
 """
 
+#TODO: dans la sortie par essaie il y a des colone avec le nom du marqueur, ça devrait plutot être le nom de la colonne
+#TODO: dans la sorie agrégé, il pourrait y avoir une page qui dit les parametre qui ont été entré dans l'interface graphique
+
 import tkinter as tk
 from tkinter import ttk, filedialog, messagebox, scrolledtext
 import pandas as pd

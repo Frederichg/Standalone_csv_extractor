@@ -3,6 +3,8 @@ Linear Mixed Model (LMM) Analysis Tool
 Performs statistical analysis on behavioral experiment data with repeated measures
 """
 
+#TODO: s'arrurer que le calcul fait bien le LMM avec le n d'animaux et non le n d'observations
+
 import tkinter as tk
 from tkinter import ttk, filedialog, messagebox, scrolledtext
 import pandas as pd
