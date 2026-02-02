@@ -3,9 +3,6 @@ CSV Trial Extractor - Behavior Analysis Data Processing
 Extracts trial-based data from CSV files using a catalog-based approach
 """
 
-#TODO: dans la sortie par essaie il y a des colone avec le nom du marqueur, ça devrait plutot être le nom de la colonne
-#TODO: dans la sorie agrégé, il pourrait y avoir une page qui dit les parametre qui ont été entré dans l'interface graphique
-
 import tkinter as tk
 from tkinter import ttk, filedialog, messagebox, scrolledtext
 import pandas as pd
@@ -562,12 +559,13 @@ class CSVTrialExtractor:
                 result = {'filename': filename.replace('.csv', '.xlsx'), 'status': 'not present'}
                 for i, marker in enumerate(self.markers):
                     if marker['state_combo'].get():
-                        result[f'marker{i+1}_name'] = marker['state_combo'].get()
-                        result[f'marker{i+1}_sum'] = 'not present'
-                        result[f'marker{i+1}_avg_time'] = 'not present'
+                        marker_name = marker['state_combo'].get()
+                        result[f'{marker_name}_sum'] = 'not present'
+                        result[f'{marker_name}_avg_time'] = 'not present'
                         if marker['reward_var'].get() and marker['reward_combo'].get():
-                            result[f'marker{i+1}_reward_sum'] = 'not present'
-                            result[f'marker{i+1}_reward_avg_time'] = 'not present'
+                            reward_name = marker['reward_combo'].get()
+                            result[f'{marker_name}_reward_{reward_name}_sum'] = 'not present'
+                            result[f'{marker_name}_reward_{reward_name}_avg_time'] = 'not present'
                 return result
             
             # Read header (first 11 rows)
@@ -607,18 +605,17 @@ class CSVTrialExtractor:
             for i, marker in enumerate(self.markers):
                 if marker['state_combo'].get():
                     marker_name = marker['state_combo'].get()
-                    result[f'marker{i+1}_name'] = marker_name
                     
-                    # Sum and average for main marker
+                    # Use actual marker name in column headers
                     presence_col = f'{marker_name}_present'
                     time_col = f'{marker_name}_time_ms'
                     if presence_col in trials_df.columns:
-                        result[f'marker{i+1}_sum'] = trials_df[presence_col].sum()
+                        result[f'{marker_name}_sum'] = trials_df[presence_col].sum()
                         present_times = trials_df[trials_df[presence_col] == 1][time_col]
-                        result[f'marker{i+1}_avg_time'] = present_times.mean() if len(present_times) > 0 else 0
+                        result[f'{marker_name}_avg_time'] = present_times.mean() if len(present_times) > 0 else 0
                     else:
-                        result[f'marker{i+1}_sum'] = 0
-                        result[f'marker{i+1}_avg_time'] = 0
+                        result[f'{marker_name}_sum'] = 0
+                        result[f'{marker_name}_avg_time'] = 0
                     
                     # Reward marker if applicable
                     if marker['reward_var'].get() and marker['reward_combo'].get():
@@ -626,12 +623,12 @@ class CSVTrialExtractor:
                         reward_presence_col = f'{marker_name}_reward_{reward_name}_present'
                         reward_time_col = f'{marker_name}_reward_{reward_name}_time_ms'
                         if reward_presence_col in trials_df.columns:
-                            result[f'marker{i+1}_reward_sum'] = trials_df[reward_presence_col].sum()
+                            result[f'{marker_name}_reward_{reward_name}_sum'] = trials_df[reward_presence_col].sum()
                             present_reward_times = trials_df[trials_df[reward_presence_col] == 1][reward_time_col]
-                            result[f'marker{i+1}_reward_avg_time'] = present_reward_times.mean() if len(present_reward_times) > 0 else 0
+                            result[f'{marker_name}_reward_{reward_name}_avg_time'] = present_reward_times.mean() if len(present_reward_times) > 0 else 0
                         else:
-                            result[f'marker{i+1}_reward_sum'] = 0
-                            result[f'marker{i+1}_reward_avg_time'] = 0
+                            result[f'{marker_name}_reward_{reward_name}_sum'] = 0
+                            result[f'{marker_name}_reward_{reward_name}_avg_time'] = 0
             
             return result
             
@@ -686,6 +683,7 @@ class CSVTrialExtractor:
                 if not marker_state:
                     continue
                 
+                # Use actual marker name in column headers
                 # Find marker in trial segment
                 marker_rows = trial_segment[trial_segment['state'] == marker_state]
                 if len(marker_rows) > 0:
@@ -736,7 +734,46 @@ class CSVTrialExtractor:
         
         agg_df = agg_df[cols]
         
-        agg_df.to_excel(agg_path, index=False, engine='openpyxl')
+        # TODO #2: Create parameters sheet with GUI configuration
+        params_data = {
+            'Parameter': [
+                'Catalog File',
+                'Sheet Name',
+                'Filename Column',
+                'Experiment Type Column',
+                'Experiment Type Filter',
+                'Trial Separator (state)',
+                'Cat Value',
+                '---Markers Configuration---',
+            ],
+            'Value': [
+                Path(self.catalog_path).name,
+                self.sheet_name,
+                self.filename_col_combo.get(),
+                self.exptype_col_combo.get(),
+                self.exptype_filter_combo.get(),
+                self.trial_sep_combo.get(),
+                self.cat_combo.get(),
+                '',
+            ]
+        }
+        
+        # Add marker configurations
+        for i, marker in enumerate(self.markers, 1):
+            if marker['state_combo'].get():
+                params_data['Parameter'].append(f'Marker {i}')
+                params_data['Value'].append(marker['state_combo'].get())
+                
+                if marker['reward_var'].get() and marker['reward_combo'].get():
+                    params_data['Parameter'].append(f'  - Reward for Marker {i}')
+                    params_data['Value'].append(marker['reward_combo'].get())
+        
+        params_df = pd.DataFrame(params_data)
+        
+        # Write both sheets to Excel
+        with pd.ExcelWriter(agg_path, engine='openpyxl') as writer:
+            agg_df.to_excel(writer, sheet_name='aggregated_data', index=False)
+            params_df.to_excel(writer, sheet_name='parameters', index=False)
 
 
 def main():
