@@ -91,6 +91,7 @@ class CSVTrialExtractor:
         ttk.Label(col_frame, text="File Name Column:").grid(row=0, column=0, sticky='w', pady=5)
         self.filename_col_combo = ttk.Combobox(col_frame, state='readonly', width=25)
         self.filename_col_combo.grid(row=0, column=1, padx=5, pady=5)
+        self.filename_col_combo.bind('<<ComboboxSelected>>', self.update_suggested_csv)
         
         ttk.Label(col_frame, text="Experiment Type Column:").grid(row=1, column=0, sticky='w', pady=5)
         self.exptype_col_combo = ttk.Combobox(col_frame, state='readonly', width=25)
@@ -110,6 +111,18 @@ class CSVTrialExtractor:
     
     def create_trial_config_tab(self, parent):
         """Create trial configuration UI"""
+        # Suggested CSV filename display
+        suggest_frame = ttk.LabelFrame(parent, text="Suggested CSV File", padding=10)
+        suggest_frame.pack(fill='x', padx=10, pady=5)
+        
+        ttk.Label(suggest_frame, text="Suggested CSV file:").pack(side='left')
+        self.suggested_csv_label = ttk.Label(suggest_frame, text="No experiment type selected", foreground='gray')
+        self.suggested_csv_label.pack(side='left', padx=10, fill='x', expand=True)
+        
+        self.browse_csv_btn = ttk.Button(suggest_frame, text="Browse CSV...", 
+                                        command=self.browse_csv_file, state='disabled')
+        self.browse_csv_btn.pack(side='right', padx=5)
+        
         # Load sample button
         load_frame = ttk.Frame(parent, padding=10)
         load_frame.pack(fill='x', padx=10, pady=5)
@@ -247,6 +260,8 @@ class CSVTrialExtractor:
                 self.filename_col_combo.current(0)
             if len(columns) > 5:
                 self.exptype_col_combo.current(5)  # Column F is index 5
+                # Trigger experiment type update to populate the dropdown
+                self.update_experiment_types()
             
             # Show preview
             preview = f"Loaded sheet '{sheet_name}' with {len(self.catalog_df)} rows and {len(columns)} columns\n\n"
@@ -275,11 +290,111 @@ class CSVTrialExtractor:
                 self.exptype_filter_combo['values'] = unique_types
                 if unique_types:
                     self.exptype_filter_combo.current(0)
+                    # Bind event to update suggested CSV when experiment type changes
+                    self.exptype_filter_combo.bind('<<ComboboxSelected>>', self.update_suggested_csv)
+                    # Update suggested CSV immediately
+                    self.update_suggested_csv()
         except Exception as e:
-            messagebox.showerror("Error", f"Failed to update experiment types:\n{str(e)}")
+            messagebox.showerror("Error", f"Failed to update experiment types:\n{str(e)}")    
+    def update_suggested_csv(self, event=None):
+        """Update the suggested CSV filename display based on current experiment type selection"""
+        if self.catalog_df is None:
+            self.suggested_csv_label.config(text="No catalog loaded", foreground='gray')
+            self.browse_csv_btn['state'] = 'disabled'
+            return
+        
+        try:
+            filename_col = self.filename_col_combo.get()
+            exptype_col = self.exptype_col_combo.get()
+            exp_filter = self.exptype_filter_combo.get()
+            
+            if not filename_col or not exptype_col or not exp_filter:
+                self.suggested_csv_label.config(text="Please complete file selection first", foreground='gray')
+                self.browse_csv_btn['state'] = 'disabled'
+                return
+            
+            # Filter by experiment type
+            filtered_df = self.catalog_df[self.catalog_df[exptype_col] == exp_filter]
+            
+            # Get first CSV filename from filtered catalog
+            suggested_file = None
+            for idx, row in filtered_df.iterrows():
+                fname = str(row[filename_col]).strip()
+                if fname and fname.lower() != 'nan':
+                    if not fname.endswith('.csv'):
+                        fname = fname + '.csv'
+                    suggested_file = fname
+                    break
+            
+            if not suggested_file:
+                self.suggested_csv_label.config(text="No CSV files found for this experiment type", foreground='red')
+                self.browse_csv_btn['state'] = 'normal'
+                return
+            
+            # Check if the suggested file exists
+            csv_path = os.path.join(self.catalog_dir, 'data', suggested_file)
+            if not os.path.exists(csv_path):
+                csv_path = os.path.join(self.catalog_dir, suggested_file)
+            
+            if os.path.exists(csv_path):
+                self.suggested_csv_label.config(text=suggested_file, foreground='green')
+                self.browse_csv_btn['state'] = 'disabled'
+            else:
+                self.suggested_csv_label.config(text=f"{suggested_file} (NOT FOUND)", foreground='red')
+                self.browse_csv_btn['state'] = 'normal'
+                
+        except Exception as e:
+            self.suggested_csv_label.config(text="Error determining suggested file", foreground='red')
+            self.browse_csv_btn['state'] = 'normal'
     
+    def browse_csv_file(self):
+        """Browse for CSV file when suggested file is not found"""
+        initialdir = self.catalog_dir if self.catalog_dir else None
+        filepath = filedialog.askopenfilename(
+            title="Select CSV File",
+            filetypes=[("CSV files", "*.csv"), ("All files", "*.*")],
+            initialdir=initialdir
+        )
+        
+        if filepath:
+            try:
+                # Load the selected CSV file
+                df = pd.read_csv(
+                    filepath,
+                    skiprows=11,
+                    usecols=range(8),
+                    encoding='latin-1',
+                    header=None,
+                    names=['Num_line', 'S', 'MS', 'Cat', 'Num_cat', 'state', 'Display', 'null']
+                )
+                
+                self.sample_csv_df = df
+                
+                # Update display
+                filename = os.path.basename(filepath)
+                self.suggested_csv_label.config(text=f"{filename} (manually selected)", foreground='blue')
+                self.sample_status_label.config(text="Manual CSV loaded successfully", foreground='green')
+                self.browse_csv_btn['state'] = 'disabled'
+                
+                # Populate dropdowns
+                unique_states = sorted(df['state'].dropna().unique().tolist())
+                self.trial_sep_combo['values'] = unique_states
+                
+                # Populate marker state dropdowns
+                for marker in self.markers:
+                    marker['state_combo']['values'] = unique_states
+                    marker['reward_combo']['values'] = unique_states
+                
+                messagebox.showinfo("Success", f"CSV file loaded successfully!\\n{len(df)} rows found.")
+                
+            except Exception as e:
+                messagebox.showerror("Error", f"Failed to load CSV file:\\n{str(e)}")
+        
     def load_sample_csv_manual(self):
         """Manual trigger to load sample CSV"""
+        # Update the suggested CSV display first
+        self.update_suggested_csv()
+        
         result = self.load_sample_csv()
         if result is not None:
             self.sample_status_label.config(text="Sample loaded successfully", foreground='green')
@@ -297,9 +412,19 @@ class CSVTrialExtractor:
                 messagebox.showerror("Error", "Please select file name column")
                 return None
             
-            # Get first CSV filename from catalog
+            # Get experiment type filter if selected
+            exptype_col = self.exptype_col_combo.get()
+            exp_filter = self.exptype_filter_combo.get()
+            
+            # Filter by experiment type if both column and filter are selected
+            if exptype_col and exp_filter:
+                filtered_df = self.catalog_df[self.catalog_df[exptype_col] == exp_filter]
+            else:
+                filtered_df = self.catalog_df
+            
+            # Get first CSV filename from filtered catalog
             first_file = None
-            for idx, row in self.catalog_df.iterrows():
+            for idx, row in filtered_df.iterrows():
                 fname = str(row[filename_col]).strip()
                 if fname and fname.lower() != 'nan':
                     if not fname.endswith('.csv'):
@@ -309,6 +434,8 @@ class CSVTrialExtractor:
             
             if not first_file:
                 messagebox.showerror("Error", "No valid CSV filenames found in catalog")
+                if hasattr(self, 'browse_csv_btn'):
+                    self.browse_csv_btn['state'] = 'normal'
                 return None
             
             # Try to load the CSV file
@@ -319,6 +446,8 @@ class CSVTrialExtractor:
             if not os.path.exists(csv_path):
                 if hasattr(self, 'sample_status_label'):
                     self.sample_status_label.config(text=f"CSV not found: {first_file}", foreground='red')
+                if hasattr(self, 'browse_csv_btn'):
+                    self.browse_csv_btn['state'] = 'normal'
                 else:
                     messagebox.showerror("Error", f"Could not find sample CSV file:\n{first_file}")
                 return None
@@ -353,12 +482,18 @@ class CSVTrialExtractor:
                     foreground='green'
                 )
             
+            # Disable browse button since we successfully loaded a CSV
+            if hasattr(self, 'browse_csv_btn'):
+                self.browse_csv_btn['state'] = 'disabled'
+            
             return df
             
         except Exception as e:
             if hasattr(self, 'sample_status_label'):
                 self.sample_status_label.config(text=f"Error loading sample", foreground='red')
-            messagebox.showerror("Error", f"Failed to load sample CSV:\n{str(e)}\n\n{traceback.format_exc()}")
+            if hasattr(self, 'browse_csv_btn'):
+                self.browse_csv_btn['state'] = 'normal'
+            messagebox.showerror("Error", f"Failed to load sample CSV:\\n{str(e)}\\n\\n{traceback.format_exc()}")
             return None
     
     def update_numcat_values(self, event=None):
